@@ -19,7 +19,7 @@ Image.CUBIC = Image.BICUBIC # type: ignore
 
 
 # Establish connection to MySQL database
-con = mycon.connect(host='localhost', user='root', passwd='ghouse130', database='project')
+con = mycon.connect(host='localhost', user='root', passwd='ghouse@1974', database='project')
 
 
 # Check if connection is successful
