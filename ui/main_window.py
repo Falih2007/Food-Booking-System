@@ -1,4 +1,3 @@
-import mysql.connector as mycon
 import tkinter as tk
 import ttkbootstrap as tb
 import os
@@ -11,25 +10,21 @@ from ttkbootstrap.tooltip import ToolTip
 from ttkbootstrap.toast import ToastNotification
 from ttkbootstrap import Style
 import winsound
+from db.connection import con, cursor
+from db.customer_db import (
+    create_customers_table_query,
+    insert_customer_query,
+    max_customer_id_query,
+    update_customer_summary_query,
+)
+from db.order_db import create_order_tables_queries
+from services.validation_service import validate_customer_fields
+from utils.helpers import int_check, set_default_values
 
 
 # Set an attribute to Image.CUBIC for compatibility with PIL
 from PIL import Image
 Image.CUBIC = Image.BICUBIC # type: ignore
-
-
-# Establish connection to MySQL database
-con = mycon.connect(host='localhost', user='root', passwd='ghouse@1974', database='project')
-
-
-# Check if connection is successful
-if con.is_connected():
-    print('Connected to MySQL')
-    cursor = con.cursor()  # Create cursor object to interact with database
-else:
-    print('Error, connection not established')
-
-
 
 
 # Create main window for the application
@@ -94,7 +89,7 @@ def close_customer_entry():# TO CLOSE THE ENTRIES WHILE MENU IS OPENED
 # Function to handle inserting customer details into the database
 def get_customer_id():
     # Query the database for the latest customer_id
-    cursor.execute('SELECT MAX(customer_id) FROM customers')
+    cursor.execute(max_customer_id_query())
     result = cursor.fetchone()
     if result and result[0] is not None:#type:ignore
         return result[0]  #type:ignore
@@ -102,26 +97,7 @@ def get_customer_id():
         return 1000  # Default value if no records exist
 def customer_button():
     # Define SQL query to create customers table if not exists
-    createquery = '''CREATE TABLE IF NOT EXISTS customers (
-                        customer_id int(10),
-                        customer_name VARCHAR(50),
-                        address VARCHAR(100),
-                        customer_phoneno INT(15),
-                        date_of_order date,
-                        time varchar(50),
-                        BUTTER_CHICKEN FLOAT(5),
-                        PIZZA FLOAT(5),
-                        BURGER FLOAT(5),
-                        GRILLED_CHICKEN_WRAP FLOAT(5),
-                        TEA FLOAT(5),
-                        COFFEE FLOAT(5),
-                        CHOCOLATE_MILKSHAKE FLOAT(5),
-                        WATERMELON_JUICE FLOAT(5),
-                        ICE_CREAM FLOAT(5),
-                        GULAB_JAMUN  FLOAT(5),
-                        CHEESE_CAKE  FLOAT(5),
-                        KUNAFA FLOAT(5)
-                    )'''
+    createquery = create_customers_table_query()
     cursor.execute(createquery)  # Execute SQL query
    
     # Get customer details from entry widgets
@@ -130,9 +106,7 @@ def customer_button():
     cphone_no = c_phone_no.get()
    
     # Validate customer name, address, and phone number
-    customer_name_check = len(customer_name) != 0 and customer_name.isalpha() and len(customer_name) > 2
-    address_check = len(address) != 0 and (address.isalpha())
-    cphone_no_check=len(cphone_no)!=0 and cphone_no.isdigit() and 9<=len(str(cphone_no)) <= 15
+    customer_name_check, address_check, cphone_no_check = validate_customer_fields(customer_name, address, cphone_no)
    
     # If all validations pass, proceed to insert customer details into the database
     if customer_name_check and address_check and cphone_no_check:
@@ -149,7 +123,7 @@ def customer_button():
         rs=cursor.fetchall()
 
 
-        insertquery = f'''INSERT INTO customers(customer_id,customer_name, address, customer_phoneno) VALUES({get_customer_id()+1},'{customer_name}', '{address}', {int(cphone_no)})''' # type: ignore
+        insertquery = insert_customer_query(get_customer_id() + 1, customer_name, address, cphone_no)
         cursor.execute(insertquery)
         con.commit()  # Commit changes to the database
         confirm_button2.config(state=tk.DISABLED)
@@ -209,17 +183,6 @@ c_address.grid(row=2, column=1, padx=10, pady=10)
 
 
 placeorder_label=tk.Label(customer_frame, text="PLACE YOUR ORDER",anchor=CENTER)
-def set_default_values(a):
-    # Set default values in Entry widgets
-    a.delete(0, tk.END)  # Clear any existing text
-    a.insert(0,'0')
-
-# Function to display confirmation window with meter widgets
-def int_check(a):
-    if a=='' or a==' ':
-        return 0
-    else:
-        return int(a)
     
 def menu_meter():
     def order():
@@ -478,20 +441,24 @@ def menu_meter():
                         CHEESE_CAKE,
                         KUNAFA)
                         values({get_customer_id()},'{c_name.get()}','{c_address.get()}',{int(c_phone_no.get())},{chicken},{pizza},{burger},{grilled_chicken},{tea},{coffee},{chocolate_milkshake},{watermelon_juice},{icecream},{gulab_jamun},{cheese_cake},{kunafa})'''
-        insertfood_query1=f'''update customers set customer_name='{c_name.get()}',
-                             address='{c_address.get()}',
-                             customer_phoneno={int(c_phone_no.get())},
-                             BUTTER_CHICKEN={chicken},
-                             PIZZA={pizza},
-                             BURGER={burger},
-                             GRILLED_CHICKEN_WRAP={grilled_chicken},
-                             TEA={tea},COFFEE={coffee},
-                             CHOCOLATE_MILKSHAKE={chocolate_milkshake},
-                             WATERMELON_JUICE={watermelon_juice},
-                             ICE_CREAM={icecream},
-                             GULAB_JAMUN={gulab_jamun},
-                             CHEESE_CAKE={cheese_cake},
-                             KUNAFA={kunafa} where customer_id={get_customer_id()}'''
+        insertfood_query1 = update_customer_summary_query(
+            c_name.get(),
+            c_address.get(),
+            c_phone_no.get(),
+            chicken,
+            pizza,
+            burger,
+            grilled_chicken,
+            tea,
+            coffee,
+            chocolate_milkshake,
+            watermelon_juice,
+            icecream,
+            gulab_jamun,
+            cheese_cake,
+            kunafa,
+            get_customer_id(),
+        )
         cursor.execute(insertfood_query1)
         con.commit()
 
@@ -499,32 +466,8 @@ def menu_meter():
         def details_confirm():
 
 
-            createquery_pizza='''create table if not exists pizza(customer_id int(10),s_pizza int(3),m_pizza int(3),l_pizza int(3),s_cost float(3),m_cost float(3),l_cost float(3))'''
-            createquery_burger='''create table if not exists burger(customer_id int(10),s_burger int(3),m_burger int(3),l_burger int(3),s_cost float(3),m_cost float(3),l_cost float(3))'''
-            createquery_tikka='''create table if not exists tikka(customer_id int(10),t_spice int(2),t_cost float(3))'''
-            createquery_wrap='''create table if not exists wrap(customer_id int(10),w_spice int(2),w_cost float(3))'''
-            createquery_tea='''create table if not exists tea(customer_id int(10),karak int(3),black_tea int(3),green_tea int(3),k_cost float(3),b_cost float(3),g_cost float(3))'''
-            createquery_coffee='''create table if not exists coffee(customer_id int(10),latte int(3),cappuccino int(3),americano int(3),l_cost float(3),c_cost float(3),a_cost float(3))'''
-            createquery_choco='''create table if not exists choco(customer_id int(10),s_choco int(3),m_choco int(3),l_choco int(3),s_cost float(3),m_cost float(3),l_cost float(3))'''
-            createquery_watermelon='''create table if not exists watermelon(customer_id int(10),s_watermelon int(3),m_watermelon int(3),l_watermelon int(3),s_cost float(3),m_cost float(3),l_cost float(3))'''
-            createquery_icecream='''create table if not exists icecream(customer_id int(10),i_cost float(3))'''
-            createquery_gulabjamun='''create table if not exists gulabjamun(customer_id int(10),g_cost float(3))'''
-            createquery_cheesecake='''create table if not exists cheesecake(customer_id int(10),ch_cost float(3))'''
-            createquery_kunafa='''create table if not exists kunafa(customer_id int(10),k_cost float(3))'''
-
-
-            cursor.execute(createquery_pizza)
-            cursor.execute(createquery_burger)
-            cursor.execute(createquery_tikka)
-            cursor.execute(createquery_wrap)
-            cursor.execute(createquery_tea)
-            cursor.execute(createquery_coffee)
-            cursor.execute(createquery_choco)
-            cursor.execute(createquery_watermelon)
-            cursor.execute(createquery_icecream)
-            cursor.execute(createquery_gulabjamun)
-            cursor.execute(createquery_cheesecake)
-            cursor.execute(createquery_kunafa)
+            for create_query in create_order_tables_queries():
+                cursor.execute(create_query)
 
 
             s_pizza=int_check(small_pizza_entry.get())
@@ -1296,4 +1239,9 @@ receipt_button.grid(row=1,column=0)
 
 
 
-root.mainloop()  # Start the main event loop
+def run():
+    root.mainloop()  # Start the main event loop
+
+
+if __name__ == "__main__":
+    run()
